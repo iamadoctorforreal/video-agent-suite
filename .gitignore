@@ -1,0 +1,102 @@
+# ============================================================
+# Video Agent Suite - Git Ignore
+# ============================================================
+
+# Environment variables (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Generated projects and output
+projects/
+output/
+logs/
+
+# Render artifacts
+render/
+*.mp4
+*.mov
+*.avi
+*.webm
+*.mkv
+
+# Audio artifacts
+*.wav
+*.mp3
+*.aac
+*.ogg
+*.flac
+
+# Image artifacts (generated)
+# Keep templates and source images, ignore generated ones
+generated_images/
+temp_*.png
+temp_*.jpg
+
+# Node modules (for Remotion projects)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Remotion build output
+out/
+.remotion/
+
+# Hyperframes build output
+hyperframes-out/
+.hyperframes/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+~*
+
+# Qwen Code specific
+.qwen/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
