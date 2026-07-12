@@ -3,9 +3,15 @@ FastAPI Backend for Video Agent Suite UI.
 Wraps existing agents and provides REST + WebSocket endpoints.
 """
 
+import sys
 import json
 import asyncio
 from pathlib import Path
+
+# Add project root to path
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 from datetime import datetime
 from typing import Optional
 
