@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Remotion + Hyperframes)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+RUN # REMOVED BY REPOGUARD: curl|bash remote execution - \
     && apt-get install -y nodejs
 
 # Copy requirements first (for Docker layer caching)
