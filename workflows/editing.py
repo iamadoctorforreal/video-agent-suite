@@ -1,6 +1,6 @@
 """
 Workflow 2: Post-Production Editing
-Raw Footage → Analysis → Silence Removal → Color Grading → Captions → B-Roll → Final Cut
+Raw Footage → Analysis → Storyboard → Silence Removal → Color Grading → Captions → B-Roll → Overlays → Final Cut
 All AI models are Alibaba Cloud only.
 """
 
@@ -15,7 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from config import PROJECTS_DIR, FFMPEG_BINARY, FFPROBE_BINARY
-from agents.transcription import TranscriptionAgent
+from agents import TranscriptionAgent, BRollAgent, OverlayAgent, AssemblyAgent, QCAgent
 
 
 class EditingWorkflow:
@@ -59,56 +59,90 @@ class EditingWorkflow:
         ))
 
         # Step 1: Analyze footage
-        self.console.print("\n[bold blue]Step 1/6: Analyzing Footage[/bold blue]")
+        self.console.print("\n[bold blue]Step 1/9: Analyzing Footage[/bold blue]")
         analysis = self._analyze_footage()
         self.console.print(f"  [green]✓[/green] Duration: {analysis.get('duration', 'unknown')}s, "
                           f"Resolution: {analysis.get('width', '?')}x{analysis.get('height', '?')}, "
                           f"FPS: {analysis.get('fps', '?')}")
 
-        # Step 2: Remove silences
+        # Step 2: Transcribe for storyboard
+        self.console.print("\n[bold blue]Step 2/9: Transcribing Audio[/bold blue]")
+        transcriber = TranscriptionAgent(self.console)
+        from agents.base import AgentInput
+        transcript_result = transcriber.run(AgentInput(
+            prompt=str(self.input_video),
+            project_dir=self.project_dir,
+            config={},
+        ))
+        transcript_text = ""
+        if transcript_result.success and transcript_result.data:
+            transcript_text = transcript_result.data.get("text", "")
+            self.console.print(f"  [green]✓[/green] Transcribed: {len(transcript_text)} chars")
+
+        # Step 3: Remove silences
         silence_removed_path = self.input_video
         if self.remove_silences:
-            self.console.print("\n[bold blue]Step 2/6: Removing Silences & Filler Words[/bold blue]")
+            self.console.print("\n[bold blue]Step 3/9: Removing Silences & Filler Words[/bold blue]")
             silence_removed_path = self._remove_silences(self.input_video, analysis)
             if silence_removed_path:
                 self.console.print(f"  [green]✓[/green] Silences removed")
             else:
-                self.console.print("  [yellow]⚠️ Silence removal skipped (will use full footage)[/yellow]")
+                self.console.print("  [yellow]️ Silence removal skipped (will use full footage)[/yellow]")
 
-        # Step 3: Color grading
+        # Step 4: Color grading
         color_graded_path = silence_removed_path
         if self.color_grade:
-            self.console.print("\n[bold blue]Step 3/6: Color Grading[/bold blue]")
+            self.console.print("\n[bold blue]Step 4/9: Color Grading[/bold blue]")
             color_graded_path = self._color_grade(silence_removed_path)
             if color_graded_path:
                 self.console.print(f"  [green]✓[/green] Color grading applied")
             else:
                 self.console.print("  [yellow]⚠️ Color grading skipped[/yellow]")
 
-        # Step 4: Generate captions
+        # Step 5: Generate captions
         srt_path = None
         if self.captions:
-            self.console.print("\n[bold blue]Step 4/6: Generating Captions[/bold blue]")
+            self.console.print("\n[bold blue]Step 5/9: Generating Captions[/bold blue]")
             srt_path = self._generate_captions(color_graded_path)
             if srt_path:
                 self.console.print(f"  [green]✓[/green] Captions generated")
             else:
-                self.console.print("  [yellow]⚠️ Captions skipped[/yellow]")
+                self.console.print("  [yellow]️ Captions skipped[/yellow]")
 
-        # Step 5: Add b-roll
-        broll_path = color_graded_path
+        # Step 6: Source B-Roll
+        broll_data = None
         if self.add_broll:
-            self.console.print("\n[bold blue]Step 5/6: Adding B-Roll[/bold blue]")
-            broll_path = self._add_broll(color_graded_path)
-            if broll_path:
-                self.console.print(f"  [green]✓[/green] B-roll added")
+            self.console.print("\n[bold blue]Step 6/9: Sourcing B-Roll[/bold blue]")
+            broll_agent = BRollAgent(self.console)
+            broll_result = broll_agent.run(AgentInput(
+                prompt=transcript_text,
+                project_dir=self.project_dir,
+                config={},
+            ))
+            if broll_result.success:
+                broll_data = broll_result.data
+                self.console.print(f"  [green]✓[/green] {broll_result.message}")
             else:
-                self.console.print("  [yellow]⚠️ B-roll skipped[/yellow]")
+                self.console.print(f"  [yellow]️ B-roll sourcing had issues: {broll_result.message}[/yellow]")
 
-        # Step 6: Assemble final video
-        self.console.print("\n[bold blue]Step 6/6: Assembling Final Video[/bold blue]")
+        # Step 7: Create Overlays (lower thirds, branding)
+        self.console.print("\n[bold blue]Step 7/9: Creating Motion Graphics Overlays[/bold blue]")
+        overlay_agent = OverlayAgent(self.console)
+        overlay_result = overlay_agent.run(AgentInput(
+            prompt="Create overlays",
+            project_dir=self.project_dir,
+            data={"srt_path": str(srt_path) if srt_path else None},
+            config={"style": "professional"},
+        ))
+        if overlay_result.success:
+            self.console.print(f"  [green]✓[/green] {overlay_result.message}")
+        else:
+            self.console.print(f"  [yellow]️ Overlays had issues: {overlay_result.message}[/yellow]")
+
+        # Step 8: Assemble final video
+        self.console.print("\n[bold blue]Step 8/9: Assembling Final Video[/bold blue]")
         output_path = self._assemble_final(
-            video_path=broll_path,
+            video_path=color_graded_path,
             srt_path=srt_path,
             output_dir=self.project_dir / "output",
         )
@@ -118,6 +152,19 @@ class EditingWorkflow:
         else:
             self.console.print("  [red]✗[/red] Final assembly failed")
             return str(self.project_dir)
+
+        # Step 9: Quality Check
+        self.console.print("\n[bold blue]Step 9/9: Quality Check[/bold blue]")
+        qc_agent = QCAgent(self.console)
+        qc_result = qc_agent.run(AgentInput(
+            prompt="QC check",
+            project_dir=self.project_dir,
+            config={"stage": "final"},
+        ))
+        if qc_result.success:
+            self.console.print(f"  [green]✓[/green] {qc_result.message}")
+        else:
+            self.console.print(f"  [yellow]⚠️ QC: {qc_result.message}[/yellow]")
 
         # Save project metadata
         project_meta = {

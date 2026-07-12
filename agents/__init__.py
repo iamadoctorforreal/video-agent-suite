@@ -8,6 +8,8 @@ from agents.transcription import TranscriptionAgent
 from agents.sound import SoundAgent
 from agents.assembly import AssemblyAgent
 from agents.qc import QCAgent
+from agents.broll import BRollAgent
+from agents.overlay import OverlayAgent
 
 __all__ = [
     "BaseAgent",
@@ -22,4 +24,6 @@ __all__ = [
     "SoundAgent",
     "AssemblyAgent",
     "QCAgent",
+    "BRollAgent",
+    "OverlayAgent",
 ]
