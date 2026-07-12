@@ -10,6 +10,8 @@ from agents.assembly import AssemblyAgent
 from agents.qc import QCAgent
 from agents.broll import BRollAgent
 from agents.overlay import OverlayAgent
+from agents.thumbnail import ThumbnailAgent
+from agents.metadata import MetadataAgent
 
 __all__ = [
     "BaseAgent",
@@ -26,4 +28,6 @@ __all__ = [
     "QCAgent",
     "BRollAgent",
     "OverlayAgent",
+    "ThumbnailAgent",
+    "MetadataAgent",
 ]

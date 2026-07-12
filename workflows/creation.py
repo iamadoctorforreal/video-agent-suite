@@ -14,6 +14,7 @@ from config import PROJECTS_DIR
 from agents import (
     ScriptingAgent, DirectorAgent, AssetSourcingAgent, VoiceoverAgent,
     MotionGraphicsAgent, SoundAgent, AssemblyAgent, QCAgent,
+    ThumbnailAgent, MetadataAgent,
 )
 from renderers.dual_render import DualRenderEngine
 
@@ -48,6 +49,8 @@ class CreationWorkflow:
         self.motion_graphics = MotionGraphicsAgent(self.console)
         self.assembly = AssemblyAgent(self.console)
         self.qc = QCAgent(self.console)
+        self.thumbnail = ThumbnailAgent(self.console)
+        self.metadata = MetadataAgent(self.console)
         self.dual_render = DualRenderEngine(self.console)
 
     def run(self) -> str:
@@ -186,7 +189,7 @@ class CreationWorkflow:
             self.console.print(f"  [yellow]⚠️ Assembly had issues: {assembly_result.message}[/yellow]")
 
         # Step 9: Quality Check
-        self.console.print("\n[bold green]Step 9/9: Quality Check[/bold green]")
+        self.console.print("\n[bold green]Step 9/11: Quality Check[/bold green]")
         qc_result = self.qc.run(type("AgentInput", (), {
             "prompt": "Run quality checks on final output",
             "project_dir": self.project_dir,
@@ -198,6 +201,34 @@ class CreationWorkflow:
             self.console.print(f"  [green]✓[/green] {qc_result.message}")
         else:
             self.console.print(f"  [yellow]⚠️ QC: {qc_result.message}[/yellow]")
+
+        # Step 10: Generate Thumbnails
+        self.console.print("\n[bold green]Step 10/11: Generating Thumbnails[/bold green]")
+        thumb_result = self.thumbnail.run(type("AgentInput", (), {
+            "prompt": "Generate thumbnails",
+            "project_dir": self.project_dir,
+            "data": script_result.data if script_result.success else None,
+            "config": config,
+        })())
+
+        if thumb_result.success:
+            self.console.print(f"  [green]✓[/green] {thumb_result.message}")
+        else:
+            self.console.print(f"  [yellow]⚠️ Thumbnail gen had issues: {thumb_result.message}[/yellow]")
+
+        # Step 11: Generate Titles & Descriptions
+        self.console.print("\n[bold green]Step 11/11: Generating Titles & Descriptions[/bold green]")
+        meta_result = self.metadata.run(type("AgentInput", (), {
+            "prompt": "Generate metadata",
+            "project_dir": self.project_dir,
+            "data": script_result.data if script_result.success else None,
+            "config": config,
+        })())
+
+        if meta_result.success:
+            self.console.print(f"  [green]✓[/green] {meta_result.message}")
+        else:
+            self.console.print(f"  [yellow]⚠️ Metadata gen had issues: {meta_result.message}[/yellow]")
 
         # Save project metadata
         self.console.print("\n[bold green]Finalizing Project[/bold green]")
