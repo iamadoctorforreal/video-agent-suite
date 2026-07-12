@@ -34,9 +34,9 @@ ALIBABA_BASE_URL = os.getenv("ALIBABA_BASE_URL", "https://dashscope-intl.aliyunc
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen3.7-max")          # Script/storyboard generation
 VISION_MODEL = os.getenv("VISION_MODEL", "qwen-vl-max")     # Image understanding
 
-# Image/Video generation (Alibaba only)
-IMAGE_MODEL = os.getenv("IMAGE_MODEL", "wan2.7-image-pro")   # Alibaba image gen
-VIDEO_MODEL = os.getenv("VIDEO_MODEL", "wan2.7t2v")          # Alibaba video gen
+# Image/Video generation (Alibaba only — models from hackathon docs)
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "wan2.6-t2i")            # Alibaba image gen (hackathon spec)
+VIDEO_MODEL = os.getenv("VIDEO_MODEL", "happyhorse-1.1-t2v")    # Alibaba video gen (hackathon spec)
 
 # TTS / ASR (Alibaba only — no Edge TTS or Whisper fallback)
 TTS_MODEL = os.getenv("TTS_MODEL", "cosyvoice-v3-plus")      # Primary TTS

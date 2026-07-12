@@ -1,8 +1,40 @@
 # Video Agent Suite
 
-AI-powered video creation and editing agent suite with **dual rendering** (Remotion + Hyperframes).
+> **Qwen Cloud Global AI Hackathon 2026** — Track: AI Showrunner
+>
+> Build AI-driven content production pipelines — video, audio, scripts, multimedia.
 
-Built for hackathon demo. Generates complete social media and marketing videos from a topic prompt.
+AI-powered video creation and editing agent suite with **dual rendering** (Remotion + Hyperframes).
+All AI models are Alibaba Cloud only — Qwen LLM, CosyVoice TTS, fun-asr, Wan 2.6 image gen.
+
+---
+
+## Quick Start
+
+```bash
+# Clone
+git clone https://github.com/iamadoctorforreal/video-agent-suite.git
+cd video-agent-suite
+
+# Install
+pip install -r requirements.txt
+
+# Configure
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run
+python -m orchestrator.main create "Your video topic" --duration 30 --style marketing
+python -m orchestrator.main edit ./raw_footage.mp4 --captions --color-grade
+python -m orchestrator.main status
+```
+
+### Docker
+
+```bash
+docker compose up -d
+docker compose exec video-agent-suite python -m orchestrator.main create "AI agents" --duration 30
+```
 
 ---
 
@@ -14,7 +46,7 @@ Built for hackathon demo. Generates complete social media and marketing videos f
 - AI script generation (Alibaba Qwen)
 - Scene-by-scene storyboard with shot design
 - Asset sourcing (Pexels b-roll, local brand folders, AI image gen)
-- Voiceover generation (Alibaba TTS / Edge TTS fallback)
+- Voiceover generation (Alibaba CosyVoice TTS)
 - Motion graphics in **Remotion** (React) + **Hyperframes** (HTML/GSAP)
 - Auto-captioning with kinetic typography
 - Final assembly with FFmpeg

@@ -72,33 +72,29 @@ class VoiceoverAgent(BaseAgent):
             return AgentOutput(success=False, message=f"Voiceover failed: {str(e)}")
 
     def _alibaba_tts(self, text: str, output_path: Path, model: str) -> Optional[Path]:
-        """Generate voiceover using Alibaba TTS."""
+        """Generate voiceover using Alibaba TTS (CosyVoice).
+        Endpoint from hackathon docs: /api/v1/services/aigc/text2audio/generation
+        """
         try:
             import requests
             from config import ALIBABA_API_KEY
 
-            # Alibaba DashScope TTS API (direct HTTP, not OpenAI-compatible)
-            url = "https://dashscope-intl.aliyuncs.com/api/v1/services/audio/tts"
-            
+            # Correct endpoint from Qwen Cloud hackathon docs
+            url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2audio/generation"
+
             headers = {
                 "Authorization": f"Bearer {ALIBABA_API_KEY}",
                 "Content-Type": "application/json",
             }
 
-            # CosyVoice API format
+            # CosyVoice API format from hackathon quickstart
             payload = {
                 "model": model,
-                "input": {
-                    "text": text,
-                },
-                "parameters": {
-                    "voice": "longxiaochun",  # Default voice
-                    "format": "mp3",
-                    "sample_rate": 16000,
-                },
+                "input": {"text": text},
+                "parameters": {"voice": "default"},
             }
 
-            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
 
             if response.status_code == 200:
                 # Check if response is audio data or JSON with audio URL

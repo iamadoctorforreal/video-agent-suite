@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  video-agent-suite:
+    build: .
+    container_name: video-agent-suite
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./output:/app/output
+      - ./projects:/app/projects
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+        reservations:
+          memory: 2g
