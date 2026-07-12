@@ -74,51 +74,61 @@ class VoiceoverAgent(BaseAgent):
     def _alibaba_tts(self, text: str, output_path: Path, model: str) -> Optional[Path]:
         """Generate voiceover using Alibaba TTS."""
         try:
-            from openai import OpenAI
-            from config import ALIBABA_API_KEY, ALIBABA_BASE_URL
+            import requests
+            from config import ALIBABA_API_KEY
 
-            client = OpenAI(api_key=ALIBABA_API_KEY, base_url=ALIBABA_BASE_URL)
+            # Alibaba DashScope TTS API (direct HTTP, not OpenAI-compatible)
+            url = "https://dashscope-intl.aliyuncs.com/api/v1/services/audio/tts"
+            
+            headers = {
+                "Authorization": f"Bearer {ALIBABA_API_KEY}",
+                "Content-Type": "application/json",
+            }
 
-            # CosyVoice uses audio.speech endpoint
-            if "cosyvoice" in model:
-                response = client.audio.speech.create(
-                    model=model,
-                    voice="default",
-                    input=text,
-                    response_format="mp3",
-                )
-                response.stream_to_file(str(output_path))
-            else:
-                # Qwen3 TTS uses chat completions with audio output
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": "You are a voiceover artist. Convert the following text to natural-sounding speech."},
-                        {"role": "user", "content": text},
-                    ],
-                    max_tokens=4096,
-                    extra_body={
-                        "enable_thinking": False,
-                        "audio": {"voice": "default", "format": "mp3"}
-                    },
-                )
+            # CosyVoice API format
+            payload = {
+                "model": model,
+                "input": {
+                    "text": text,
+                },
+                "parameters": {
+                    "voice": "longxiaochun",  # Default voice
+                    "format": "mp3",
+                    "sample_rate": 16000,
+                },
+            }
 
-                # Extract audio from response
-                if hasattr(response, 'audio') and response.audio:
-                    import base64
-                    audio_data = base64.b64decode(response.audio.data)
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+
+            if response.status_code == 200:
+                # Check if response is audio data or JSON with audio URL
+                content_type = response.headers.get("Content-Type", "")
+                
+                if "audio" in content_type or "octet-stream" in content_type:
+                    # Direct audio data
                     with open(output_path, "wb") as f:
-                        f.write(audio_data)
+                        f.write(response.content)
+                    self.console.print(f"  [green]✓[/green] Voiceover generated ({model})")
+                    return output_path
                 else:
-                    self.console.print(f"  [yellow]⚠️ {model} returned no audio[/yellow]")
-                    return None
-
-            self.console.print(f"  [green]✓[/green] Voiceover generated ({model})")
-            return output_path
+                    # JSON response with audio URL or base64
+                    data = response.json()
+                    if "output" in data and "audio" in data["output"]:
+                        import base64
+                        audio_data = base64.b64decode(data["output"]["audio"])
+                        with open(output_path, "wb") as f:
+                            f.write(audio_data)
+                        self.console.print(f"  [green]✓[/green] Voiceover generated ({model})")
+                        return output_path
+                    else:
+                        self.console.print(f"  [yellow]⚠️ {model} returned unexpected format: {data}[/yellow]")
+            else:
+                self.console.print(f"  [yellow]⚠️ {model} failed: {response.status_code} - {response.text[:100]}[/yellow]")
 
         except Exception as e:
             self.console.print(f"  [yellow]⚠️ {model} failed: {str(e)[:80]}[/yellow]")
-            return None
+
+        return None
 
     def _generate_srt(self, text: str, output_dir: Path) -> Path:
         """Generate basic SRT from script text.
