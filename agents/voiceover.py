@@ -4,6 +4,7 @@ Primary: CosyVoice v3 Plus
 Fallback: Qwen3 TTS Instruct Flash
 """
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -88,11 +89,14 @@ class VoiceoverAgent(BaseAgent):
             }
 
             # CosyVoice API format from hackathon quickstart
+            # Use "default" voice as shown in hackathon docs
             payload = {
                 "model": model,
                 "input": {"text": text},
-                "parameters": {"voice": "longxiaochun"},
+                "parameters": {"voice": "default"},
             }
+
+            self.console.print(f"  [dim]Calling TTS API: {model} with {len(text)} chars...[/dim]")
 
             response = requests.post(url, headers=headers, json=payload, timeout=120)
 
@@ -117,9 +121,9 @@ class VoiceoverAgent(BaseAgent):
                         self.console.print(f"  [green]✓[/green] Voiceover generated ({model})")
                         return output_path
                     else:
-                        self.console.print(f"  [yellow]⚠️ {model} returned unexpected format: {data}[/yellow]")
+                        self.console.print(f"  [yellow]️ {model} returned unexpected format: {json.dumps(data, indent=2)[:200]}[/yellow]")
             else:
-                self.console.print(f"  [yellow]⚠️ {model} failed: {response.status_code} - {response.text[:100]}[/yellow]")
+                self.console.print(f"  [yellow]⚠️ {model} failed: {response.status_code} - {response.text[:200]}[/yellow]")
 
         except Exception as e:
             self.console.print(f"  [yellow]⚠️ {model} failed: {str(e)[:80]}[/yellow]")

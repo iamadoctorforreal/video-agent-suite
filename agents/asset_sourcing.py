@@ -183,7 +183,8 @@ class AssetSourcingAgent(BaseAgent):
             return None
 
         try:
-            # Use DashScope native endpoint for image generation
+            # Use DashScope native endpoint for image generation (async)
+            # Correct endpoint from hackathon docs: /services/aigc/text2image/image-synthesis
             url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
             headers = {
                 "Authorization": f"Bearer {ALIBABA_API_KEY}",
@@ -201,25 +202,29 @@ class AssetSourcingAgent(BaseAgent):
                 },
             }
 
+            self.console.print(f"  [dim]Submitting image gen task for: {query[:50]}...[/dim]")
+
             # Submit async task
             response = requests.post(url, headers=headers, json=payload, timeout=30)
 
             if response.status_code != 200:
-                self.console.print(f"  [red]✗[/red] Image gen request failed: {response.status_code} {response.text[:100]}")
+                self.console.print(f"  [red]✗[/red] Image gen request failed: {response.status_code} {response.text[:150]}")
                 return None
 
             task_data = response.json()
             task_id = task_data.get("output", {}).get("task_id")
             if not task_id:
-                self.console.print(f"  [red]✗[/red] No task_id in response: {task_data}")
+                self.console.print(f"  [red][/red] No task_id in response: {json.dumps(task_data, indent=2)[:200]}")
                 return None
+
+            self.console.print(f"  [dim]Task ID: {task_id}, polling...[/dim]")
 
             # Poll for completion
             import time
             poll_url = f"https://dashscope-intl.aliyuncs.com/api/v1/tasks/{task_id}"
             poll_headers = {"Authorization": f"Bearer {ALIBABA_API_KEY}"}
 
-            for _ in range(30):  # Poll up to 60 seconds
+            for attempt in range(30):  # Poll up to 60 seconds
                 time.sleep(2)
                 poll_response = requests.get(poll_url, headers=poll_headers, timeout=10)
                 if poll_response.status_code != 200:
@@ -242,10 +247,10 @@ class AssetSourcingAgent(BaseAgent):
                                 return img_path
 
                 elif status == "FAILED":
-                    self.console.print(f"  [red]✗[/red] Image gen task failed: {result}")
+                    self.console.print(f"  [red]✗[/red] Image gen task failed: {result.get('output', {}).get('message', 'Unknown error')}")
                     return None
 
-            self.console.print(f"  [yellow]⚠️ Image gen timed out[/yellow]")
+            self.console.print(f"  [yellow]⚠️ Image gen timed out after 60s[/yellow]")
             return None
 
         except Exception as e:
