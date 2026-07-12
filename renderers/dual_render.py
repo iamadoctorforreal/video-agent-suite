@@ -36,7 +36,7 @@ class DualRenderEngine:
                     ["npm", "install"],
                     cwd=str(remotion_dir),
                     capture_output=True,
-                    timeout=120,
+                    timeout=300,
                     shell=True,
                 )
             except Exception as e:
@@ -49,7 +49,7 @@ class DualRenderEngine:
                 cwd=str(remotion_dir),
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=600,
                 shell=True,
             )
 
@@ -85,7 +85,7 @@ class DualRenderEngine:
                 cwd=str(hf_dir),
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=600,
                 shell=True,
             )
 

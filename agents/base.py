@@ -72,7 +72,7 @@ class BaseAgent(ABC):
         return OpenAI(
             api_key=ALIBABA_API_KEY,
             base_url=ALIBABA_BASE_URL,
-            timeout=120.0,
+            timeout=300.0,
         )
 
     def call_llm(self, system_prompt: str, user_prompt: str, model: str = None) -> str:
