@@ -5,6 +5,9 @@ from agents.asset_sourcing import AssetSourcingAgent
 from agents.voiceover import VoiceoverAgent
 from agents.motion_graphics import MotionGraphicsAgent
 from agents.transcription import TranscriptionAgent
+from agents.sound import SoundAgent
+from agents.assembly import AssemblyAgent
+from agents.qc import QCAgent
 
 __all__ = [
     "BaseAgent",
@@ -16,4 +19,7 @@ __all__ = [
     "VoiceoverAgent",
     "MotionGraphicsAgent",
     "TranscriptionAgent",
+    "SoundAgent",
+    "AssemblyAgent",
+    "QCAgent",
 ]
