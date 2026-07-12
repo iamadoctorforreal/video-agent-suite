@@ -91,7 +91,7 @@ class VoiceoverAgent(BaseAgent):
             payload = {
                 "model": model,
                 "input": {"text": text},
-                "parameters": {"voice": "default"},
+                "parameters": {"voice": "longxiaochun"},
             }
 
             response = requests.post(url, headers=headers, json=payload, timeout=120)
