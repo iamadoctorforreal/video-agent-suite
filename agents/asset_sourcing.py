@@ -175,7 +175,7 @@ class AssetSourcingAgent(BaseAgent):
         return None
 
     def _generate_image(self, query: str, output_dir: Path, filename: str) -> Optional[Path]:
-        """Generate an image using Alibaba's image model (DashScope native endpoint)."""
+        """Generate an image using DashScope SDK (proven working pattern)."""
         from config import ALIBABA_API_KEY, IMAGE_MODEL
 
         if not ALIBABA_API_KEY:
@@ -183,74 +183,60 @@ class AssetSourcingAgent(BaseAgent):
             return None
 
         try:
-            # Use DashScope native endpoint for image generation (async)
-            # Correct endpoint from hackathon docs: /services/aigc/text2image/image-synthesis
-            url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
-            headers = {
-                "Authorization": f"Bearer {ALIBABA_API_KEY}",
-                "Content-Type": "application/json",
-                "X-DashScope-Async": "enable",
-            }
-            payload = {
-                "model": IMAGE_MODEL,
-                "input": {
-                    "prompt": f"Social media video background: {query}. Clean, modern, abstract. Vertical 9:16 aspect ratio. No text.",
-                },
-                "parameters": {
-                    "size": "1024*1792",
-                    "n": 1,
-                },
-            }
+            import time
+            import dashscope
+            from dashscope.aigc.image_generation import ImageGeneration
+            from dashscope.api_entities.dashscope_response import Message
+
+            dashscope.api_key = ALIBABA_API_KEY
+            dashscope.base_http_api_url = 'https://dashscope-intl.aliyuncs.com/api/v1'
+
+            prompt = f"Social media video background: {query}. Clean, modern, abstract. Vertical 9:16 aspect ratio. No text."
+
+            message = Message(role="user", content=[{"text": prompt}])
 
             self.console.print(f"  [dim]Submitting image gen task for: {query[:50]}...[/dim]")
 
-            # Submit async task
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response = ImageGeneration.async_call(
+                model=IMAGE_MODEL,
+                api_key=ALIBABA_API_KEY,
+                messages=[message],
+                n=1,
+                size="1280*1280",
+                prompt_extend=True,
+            )
 
             if response.status_code != 200:
-                self.console.print(f"  [red]✗[/red] Image gen request failed: {response.status_code} {response.text[:150]}")
+                self.console.print(f"  [red]✗[/red] Image gen failed: {response.message}")
                 return None
 
-            task_data = response.json()
-            task_id = task_data.get("output", {}).get("task_id")
-            if not task_id:
-                self.console.print(f"  [red][/red] No task_id in response: {json.dumps(task_data, indent=2)[:200]}")
-                return None
-
+            task_id = response.output.task_id
             self.console.print(f"  [dim]Task ID: {task_id}, polling...[/dim]")
 
-            # Poll for completion
-            import time
-            poll_url = f"https://dashscope-intl.aliyuncs.com/api/v1/tasks/{task_id}"
-            poll_headers = {"Authorization": f"Bearer {ALIBABA_API_KEY}"}
-
-            for attempt in range(30):  # Poll up to 60 seconds
-                time.sleep(2)
-                poll_response = requests.get(poll_url, headers=poll_headers, timeout=10)
-                if poll_response.status_code != 200:
-                    continue
-
-                result = poll_response.json()
-                status = result.get("output", {}).get("task_status", "")
+            for _ in range(24):
+                time.sleep(5)
+                task_status = ImageGeneration.fetch(task_id, api_key=ALIBABA_API_KEY)
+                status = task_status.output.task_status
 
                 if status == "SUCCEEDED":
-                    results = result.get("output", {}).get("results", [])
-                    if results:
-                        img_url = results[0].get("url", "")
-                        if img_url:
-                            img_path = output_dir / f"{filename}.png"
-                            img_response = requests.get(img_url, timeout=30)
-                            if img_response.status_code == 200:
-                                with open(img_path, "wb") as f:
-                                    f.write(img_response.content)
-                                self.console.print(f"  [green]✓[/green] AI image generated: {filename}.png")
-                                return img_path
+                    if hasattr(task_status.output, 'results') and task_status.output.results:
+                        img_url = task_status.output.results[0].url
+                    else:
+                        img_url = task_status.output.choices[0].message.content[0]["image"]
+
+                    img_path = output_dir / f"{filename}.png"
+                    img_data = requests.get(img_url, timeout=30)
+                    if img_data.status_code == 200:
+                        with open(img_path, "wb") as f:
+                            f.write(img_data.content)
+                        self.console.print(f"  [green]✓[/green] AI image generated: {filename}.png")
+                        return img_path
 
                 elif status == "FAILED":
-                    self.console.print(f"  [red]✗[/red] Image gen task failed: {result.get('output', {}).get('message', 'Unknown error')}")
+                    self.console.print(f"  [red]✗[/red] Image gen task failed: {task_status.message}")
                     return None
 
-            self.console.print(f"  [yellow]⚠️ Image gen timed out after 60s[/yellow]")
+            self.console.print(f"  [yellow]⚠️ Image gen timed out[/yellow]")
             return None
 
         except Exception as e:

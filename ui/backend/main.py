@@ -41,6 +41,17 @@ OUTPUT_DIR = PROJECTS_DIR.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 
+FRONTEND_DIR = PROJECT_ROOT / "ui" / "frontend"
+
+
+@app.get("/gui")
+async def serve_frontend():
+    """Serve the frontend HTML."""
+    frontend_path = FRONTEND_DIR / "index.html"
+    if frontend_path.exists():
+        return HTMLResponse(content=frontend_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Frontend not found</h1>", status_code=404)
+
 
 # ============================================================
 # Models

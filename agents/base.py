@@ -19,6 +19,7 @@ class AgentInput:
     """Standardized input for all agents."""
     prompt: str = ""
     project_dir: Optional[Path] = None
+    data: Any = None
     context: dict = field(default_factory=dict)
     config: dict = field(default_factory=dict)
 

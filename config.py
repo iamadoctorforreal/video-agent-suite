@@ -77,7 +77,7 @@ FFPROBE_BINARY = os.getenv("FFPROBE_BINARY", "ffprobe")
 
 DEFAULT_ASPECT_RATIO = "9:16"  # Social media vertical
 DEFAULT_DURATION_SECONDS = 30
-DEFAULT_VOICE = "zh-CN-YunxiNeural"  # Edge TTS default voice (fallback)
+DEFAULT_VOICE = "longanyang"  # CosyVoice v3 Plus voice
 
 # Thumbnail generation
 THUMBNAIL_COUNT = 2

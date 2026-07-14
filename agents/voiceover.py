@@ -1,10 +1,12 @@
 """
 Voiceover Agent — generates voiceover from script using Alibaba TTS.
+Uses DashScope SDK with WebSocket (proven working pattern).
 Primary: CosyVoice v3 Plus
 Fallback: Qwen3 TTS Instruct Flash
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -17,11 +19,12 @@ class VoiceoverAgent(BaseAgent):
     name = "voiceover"
     description = "Generates voiceover audio (Alibaba TTS)"
 
-    # Alibaba TTS models in priority order
     TTS_MODELS = [
-        "cosyvoice-v3-plus",        # Primary: best quality
-        "qwen3-tts-instruct-flash", # Fallback: fast, instruction-following
+        "cosyvoice-v3-plus",
+        "qwen3-tts-instruct-flash",
     ]
+
+    VOICE = "longanyang"
 
     def execute(self, input_data: AgentInput) -> AgentOutput:
         script_text = input_data.prompt
@@ -30,11 +33,9 @@ class VoiceoverAgent(BaseAgent):
         if not script_text:
             return AgentOutput(success=False, message="No script text provided")
 
-        # Create audio directory
         audio_dir = project_dir / "audio" if project_dir else Path("audio")
         audio_dir.mkdir(parents=True, exist_ok=True)
 
-        # Extract full script if available
         if isinstance(input_data.data, dict):
             full_script = input_data.data.get("full_script", script_text)
         else:
@@ -44,19 +45,17 @@ class VoiceoverAgent(BaseAgent):
         srt_path = audio_dir / "captions.srt"
 
         try:
-            # Try each Alibaba TTS model in order
             vo_path = None
             used_model = None
 
             for model in self.TTS_MODELS:
                 self.console.print(f"  [dim]Trying {model}...[/dim]")
-                vo_path = self._alibaba_tts(full_script, output_path, model)
+                vo_path = self._dashscope_tts(full_script, output_path, model)
                 if vo_path:
                     used_model = model
                     break
 
             if vo_path:
-                # Generate SRT captions from the script
                 srt_path = self._generate_srt(full_script, audio_dir)
 
                 return AgentOutput(
@@ -72,58 +71,29 @@ class VoiceoverAgent(BaseAgent):
         except Exception as e:
             return AgentOutput(success=False, message=f"Voiceover failed: {str(e)}")
 
-    def _alibaba_tts(self, text: str, output_path: Path, model: str) -> Optional[Path]:
-        """Generate voiceover using Alibaba TTS (CosyVoice).
-        Endpoint from hackathon docs: /api/v1/services/aigc/text2audio/generation
-        """
+    def _dashscope_tts(self, text: str, output_path: Path, model: str) -> Optional[Path]:
+        """Generate voiceover using DashScope SDK (WebSocket — proven working)."""
         try:
-            import requests
+            import dashscope
+            from dashscope.audio.tts_v2 import SpeechSynthesizer
             from config import ALIBABA_API_KEY
 
-            # Correct endpoint from Qwen Cloud hackathon docs
-            url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2audio/generation"
+            dashscope.api_key = ALIBABA_API_KEY
+            dashscope.base_websocket_api_url = 'wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference'
 
-            headers = {
-                "Authorization": f"Bearer {ALIBABA_API_KEY}",
-                "Content-Type": "application/json",
-            }
+            synthesizer = SpeechSynthesizer(model=model, voice=self.VOICE)
 
-            # CosyVoice API format from hackathon quickstart
-            # Use "default" voice as shown in hackathon docs
-            payload = {
-                "model": model,
-                "input": {"text": text},
-                "parameters": {"voice": "default"},
-            }
+            self.console.print(f"  [dim]Calling TTS via WebSocket: {model} with {len(text)} chars...[/dim]")
 
-            self.console.print(f"  [dim]Calling TTS API: {model} with {len(text)} chars...[/dim]")
+            audio = synthesizer.call(text)
 
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
-
-            if response.status_code == 200:
-                # Check if response is audio data or JSON with audio URL
-                content_type = response.headers.get("Content-Type", "")
-                
-                if "audio" in content_type or "octet-stream" in content_type:
-                    # Direct audio data
-                    with open(output_path, "wb") as f:
-                        f.write(response.content)
-                    self.console.print(f"  [green]✓[/green] Voiceover generated ({model})")
-                    return output_path
-                else:
-                    # JSON response with audio URL or base64
-                    data = response.json()
-                    if "output" in data and "audio" in data["output"]:
-                        import base64
-                        audio_data = base64.b64decode(data["output"]["audio"])
-                        with open(output_path, "wb") as f:
-                            f.write(audio_data)
-                        self.console.print(f"  [green]✓[/green] Voiceover generated ({model})")
-                        return output_path
-                    else:
-                        self.console.print(f"  [yellow]️ {model} returned unexpected format: {json.dumps(data, indent=2)[:200]}[/yellow]")
+            if audio and len(audio) > 0:
+                with open(output_path, 'wb') as f:
+                    f.write(audio)
+                self.console.print(f"  [green]✓[/green] Voiceover generated ({model}, voice={self.VOICE})")
+                return output_path
             else:
-                self.console.print(f"  [yellow]⚠️ {model} failed: {response.status_code} - {response.text[:200]}[/yellow]")
+                self.console.print(f"  [yellow]⚠️ {model} returned empty audio[/yellow]")
 
         except Exception as e:
             self.console.print(f"  [yellow]⚠️ {model} failed: {str(e)[:80]}[/yellow]")

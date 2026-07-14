@@ -12,6 +12,7 @@ from agents.broll import BRollAgent
 from agents.overlay import OverlayAgent
 from agents.thumbnail import ThumbnailAgent
 from agents.metadata import MetadataAgent
+from agents.video_generation import VideoGenerationAgent
 
 __all__ = [
     "BaseAgent",
@@ -30,4 +31,5 @@ __all__ = [
     "OverlayAgent",
     "ThumbnailAgent",
     "MetadataAgent",
+    "VideoGenerationAgent",
 ]

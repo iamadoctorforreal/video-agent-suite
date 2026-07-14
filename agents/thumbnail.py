@@ -62,66 +62,55 @@ class ThumbnailAgent(BaseAgent):
         )
 
     def _generate_thumbnail(self, prompt: str, output_dir: Path, filename: str) -> Optional[Path]:
-        """Generate a thumbnail image using wan2.6-t2i."""
+        """Generate a thumbnail image using DashScope SDK (proven working pattern)."""
         from config import ALIBABA_API_KEY, IMAGE_MODEL
 
         if not ALIBABA_API_KEY:
             return None
 
         try:
-            # Use DashScope native endpoint for image generation
-            url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
-            headers = {
-                "Authorization": f"Bearer {ALIBABA_API_KEY}",
-                "Content-Type": "application/json",
-                "X-DashScope-Async": "enable",
-            }
-            payload = {
-                "model": IMAGE_MODEL,
-                "input": {"prompt": prompt},
-                "parameters": {
-                    "size": "1920*1080",  # 16:9 for thumbnails
-                    "n": 1,
-                },
-            }
+            import dashscope
+            from dashscope.aigc.image_generation import ImageGeneration
+            from dashscope.api_entities.dashscope_response import Message
 
-            # Submit async task
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            dashscope.api_key = ALIBABA_API_KEY
+            dashscope.base_http_api_url = 'https://dashscope-intl.aliyuncs.com/api/v1'
+
+            message = Message(role="user", content=[{"text": prompt}])
+
+            response = ImageGeneration.async_call(
+                model=IMAGE_MODEL,
+                api_key=ALIBABA_API_KEY,
+                messages=[message],
+                n=1,
+                size="1920*1080",
+                prompt_extend=True,
+            )
 
             if response.status_code != 200:
-                self.console.print(f"  [yellow]⚠️ Thumbnail gen failed: {response.status_code}[/yellow]")
+                self.console.print(f"  [yellow]⚠️ Thumbnail gen failed: {response.message}[/yellow]")
                 return None
 
-            task_data = response.json()
-            task_id = task_data.get("output", {}).get("task_id")
-            if not task_id:
-                return None
+            task_id = response.output.task_id
 
-            # Poll for completion
-            poll_url = f"https://dashscope-intl.aliyuncs.com/api/v1/tasks/{task_id}"
-            poll_headers = {"Authorization": f"Bearer {ALIBABA_API_KEY}"}
-
-            for _ in range(30):
-                time.sleep(2)
-                poll_response = requests.get(poll_url, headers=poll_headers, timeout=10)
-                if poll_response.status_code != 200:
-                    continue
-
-                result = poll_response.json()
-                status = result.get("output", {}).get("task_status", "")
+            for _ in range(24):
+                time.sleep(5)
+                task_status = ImageGeneration.fetch(task_id, api_key=ALIBABA_API_KEY)
+                status = task_status.output.task_status
 
                 if status == "SUCCEEDED":
-                    results = result.get("output", {}).get("results", [])
-                    if results:
-                        img_url = results[0].get("url", "")
-                        if img_url:
-                            img_path = output_dir / f"{filename}.png"
-                            img_response = requests.get(img_url, timeout=30)
-                            if img_response.status_code == 200:
-                                with open(img_path, "wb") as f:
-                                    f.write(img_response.content)
-                                self.console.print(f"  [green]✓[/green] Thumbnail: {filename}.png")
-                                return img_path
+                    if hasattr(task_status.output, 'results') and task_status.output.results:
+                        img_url = task_status.output.results[0].url
+                    else:
+                        img_url = task_status.output.choices[0].message.content[0]["image"]
+
+                    img_path = output_dir / f"{filename}.png"
+                    img_data = requests.get(img_url, timeout=30)
+                    if img_data.status_code == 200:
+                        with open(img_path, "wb") as f:
+                            f.write(img_data.content)
+                        self.console.print(f"  [green]✓[/green] Thumbnail: {filename}.png")
+                        return img_path
 
                 elif status == "FAILED":
                     return None

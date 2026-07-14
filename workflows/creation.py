@@ -14,7 +14,7 @@ from config import PROJECTS_DIR
 from agents import (
     ScriptingAgent, DirectorAgent, AssetSourcingAgent, VoiceoverAgent,
     MotionGraphicsAgent, SoundAgent, AssemblyAgent, QCAgent,
-    ThumbnailAgent, MetadataAgent,
+    ThumbnailAgent, MetadataAgent, VideoGenerationAgent,
 )
 from renderers.dual_render import DualRenderEngine
 
@@ -51,6 +51,7 @@ class CreationWorkflow:
         self.qc = QCAgent(self.console)
         self.thumbnail = ThumbnailAgent(self.console)
         self.metadata = MetadataAgent(self.console)
+        self.video_generation = VideoGenerationAgent(self.console)
         self.dual_render = DualRenderEngine(self.console)
 
     def run(self) -> str:
@@ -113,8 +114,22 @@ class CreationWorkflow:
         else:
             self.console.print(f"  [yellow]⚠️ Asset sourcing had issues: {asset_result.message}[/yellow]")
 
-        # Step 4: Generate Voiceover
-        self.console.print("\n[bold green]Step 4/9: Generating Voiceover[/bold green]")
+        # Step 4: Generate Video Clips
+        self.console.print("\n[bold green]Step 4/11: Generating Video Clips (AI)[/bold green]")
+        vid_result = self.video_generation.run(type("AgentInput", (), {
+            "prompt": self.topic,
+            "project_dir": self.project_dir,
+            "data": director_result.data if director_result.success else {},
+            "config": config,
+        })())
+
+        if vid_result.success:
+            self.console.print(f"  [green]✓[/green] {vid_result.message}")
+        else:
+            self.console.print(f"  [yellow]⚠️ Video generation had issues: {vid_result.message}[/yellow]")
+
+        # Step 5: Generate Voiceover
+        self.console.print("\n[bold green]Step 5/11: Generating Voiceover[/bold green]")
         vo_result = self.voiceover.run(type("AgentInput", (), {
             "prompt": script_result.data.get("full_script", self.topic),
             "project_dir": self.project_dir,
@@ -127,8 +142,8 @@ class CreationWorkflow:
         else:
             self.console.print(f"  [yellow]⚠️ Voiceover had issues: {vo_result.message}[/yellow]")
 
-        # Step 5: Source Sound (BGM + SFX)
-        self.console.print("\n[bold green]Step 5/9: Sourcing Sound (BGM + SFX)[/bold green]")
+        # Step 6: Source Sound (BGM + SFX)
+        self.console.print("\n[bold green]Step 6/11: Sourcing Sound (BGM + SFX)[/bold green]")
         sound_result = self.sound.run(type("AgentInput", (), {
             "prompt": "Source BGM and SFX for all scenes",
             "project_dir": self.project_dir,
@@ -141,8 +156,8 @@ class CreationWorkflow:
         else:
             self.console.print(f"  [yellow]⚠️ Sound sourcing had issues: {sound_result.message}[/yellow]")
 
-        # Step 6: Create Motion Graphics
-        self.console.print("\n[bold green]Step 6/9: Creating Motion Graphics (Remotion + Hyperframes)[/bold green]")
+        # Step 7: Create Motion Graphics
+        self.console.print("\n[bold green]Step 7/11: Creating Motion Graphics (Remotion + Hyperframes)[/bold green]")
         mg_result = self.motion_graphics.run(type("AgentInput", (), {
             "prompt": "Create motion graphics compositions",
             "project_dir": self.project_dir,
@@ -156,8 +171,8 @@ class CreationWorkflow:
 
         self.console.print(f"  [green]✓[/green] {mg_result.message}")
 
-        # Step 7: Dual Render
-        self.console.print("\n[bold green]Step 7/9: Dual Render (Remotion + Hyperframes)[/bold green]")
+        # Step 8: Dual Render
+        self.console.print("\n[bold green]Step 8/11: Dual Render (Remotion + Hyperframes)[/bold green]")
         render_results = self.dual_render.render_both(self.project_dir, mg_result.data)
 
         if render_results["remotion"]:
@@ -170,8 +185,8 @@ class CreationWorkflow:
         else:
             self.console.print("  [yellow]⚠️ Hyperframes render skipped (CLI may need setup)[/yellow]")
 
-        # Step 8: Assemble Final Video
-        self.console.print("\n[bold green]Step 8/9: Assembling Final Video[/bold green]")
+        # Step 9: Assemble Final Video
+        self.console.print("\n[bold green]Step 9/11: Assembling Final Video[/bold green]")
         assembly_result = self.assembly.run(type("AgentInput", (), {
             "prompt": "Assemble final video from all components",
             "project_dir": self.project_dir,
@@ -188,8 +203,8 @@ class CreationWorkflow:
         else:
             self.console.print(f"  [yellow]⚠️ Assembly had issues: {assembly_result.message}[/yellow]")
 
-        # Step 9: Quality Check
-        self.console.print("\n[bold green]Step 9/11: Quality Check[/bold green]")
+        # Step 10: Quality Check
+        self.console.print("\n[bold green]Step 10/11: Quality Check[/bold green]")
         qc_result = self.qc.run(type("AgentInput", (), {
             "prompt": "Run quality checks on final output",
             "project_dir": self.project_dir,

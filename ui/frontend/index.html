@@ -3,204 +3,563 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Agent Suite - Interactive UI</title>
+    <title>Video Agent Suite — Canvas</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        .pipeline-node { transition: all 0.3s ease; }
-        .pipeline-node.active { animation: pulse 2s infinite; }
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-            50% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-        }
+        .agent-node { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+        .agent-node:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+        .agent-node.selected { outline: 2px solid #3b82f6; outline-offset: 2px; }
+        @keyframes pulseBlue { 0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,0.4)} 50%{box-shadow:0 0 0 10px rgba(59,130,246,0)} }
+        @keyframes pulseYellow { 0%,100%{box-shadow:0 0 0 0 rgba(234,179,8,0.4)} 50%{box-shadow:0 0 0 10px rgba(234,179,8,0)} }
+        .status-running { animation: pulseBlue 2s infinite; }
+        .status-waiting { animation: pulseYellow 2s infinite; }
+        @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        .drop-zone { border: 2px dashed #4b5563; transition: all 0.3s; }
+        .drop-zone.drag-over { border-color: #3b82f6; background: rgba(59,130,246,0.1); }
+        .json-view { font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        .connector-arrow { position: relative; display: flex; align-items: center; padding: 0 2px; }
+        .connector-arrow .line { width: 24px; height: 2px; }
+        .connector-arrow .head { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid; }
     </style>
 </head>
-<body class="bg-gray-900 text-white">
-    <div id="root"></div>
+<body class="bg-gray-950 text-white min-h-screen">
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+<!-- ===== HEADER ===== -->
+<header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-6">
+        <h1 class="text-xl font-bold flex items-center gap-2">
+            <span class="text-2xl">🎬</span> Video Agent Suite
+        </h1>
+        <div class="flex bg-gray-800 rounded-lg p-1">
+            <button id="btn-create" onclick="setWorkflow('create')" class="px-4 py-1.5 rounded-md text-sm font-medium transition bg-blue-600 text-white">
+                🎬 Create
+            </button>
+            <button id="btn-edit" onclick="setWorkflow('edit')" class="px-4 py-1.5 rounded-md text-sm font-medium transition text-gray-400 hover:text-white">
+                ✂️ Edit
+            </button>
+        </div>
+    </div>
+    <div class="flex items-center gap-3">
+        <div id="status-indicator" class="text-xs text-gray-500">🟢 Ready</div>
+    </div>
+</header>
 
-        // Pipeline stages
-        const PIPELINE_STAGES = [
-            { id: 'scripting', name: 'Scripting', icon: '📝' },
-            { id: 'director', name: 'Director', icon: '🎬' },
-            { id: 'assets', name: 'Assets', icon: '️' },
-            { id: 'voiceover', name: 'Voiceover', icon: '️' },
-            { id: 'sound', name: 'Sound', icon: '' },
-            { id: 'motion', name: 'Motion Graphics', icon: '✨' },
-            { id: 'render', name: 'Dual Render', icon: '🎥' },
-            { id: 'assembly', name: 'Assembly', icon: '🔧' },
-            { id: 'qc', name: 'Quality Check', icon: '✅' },
-            { id: 'thumbnails', name: 'Thumbnails', icon: '️' },
-            { id: 'metadata', name: 'Metadata', icon: '📋' },
-        ];
+<!-- ===== MAIN LAYOUT ===== -->
+<div class="flex overflow-hidden" style="height: calc(100vh - 52px);">
 
-        function App() {
-            const [projects, setProjects] = useState([]);
-            const [selectedProject, setSelectedProject] = useState(null);
-            const [isCreating, setIsCreating] = useState(false);
-            const [topic, setTopic] = useState('');
-            const [duration, setDuration] = useState(30);
-            const [style, setStyle] = useState('marketing');
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
+        <div class="p-4 border-b border-gray-800">
+            <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Projects</h2>
+        </div>
+        <div id="project-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+            <div class="text-gray-600 text-sm text-center py-8">No projects yet</div>
+        </div>
+    </aside>
 
-            // Fetch projects
-            useEffect(() => {
-                fetchProjects();
-                const interval = setInterval(fetchProjects, 5000);
-                return () => clearInterval(interval);
-            }, []);
+    <!-- Main Canvas Area -->
+    <main class="flex-1 flex flex-col overflow-hidden">
 
-            const fetchProjects = async () => {
-                try {
-                    const res = await fetch('/api/projects');
-                    const data = await res.json();
-                    setProjects(data.projects || []);
-                } catch (err) {
-                    console.error('Failed to fetch projects:', err);
+        <!-- Pipeline Canvas -->
+        <div class="flex-1 p-6 overflow-auto">
+            <div class="mb-4">
+                <h2 id="workflow-title" class="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+                    Workflow 1: Creative Production
+                </h2>
+            </div>
+
+            <!-- Agent Nodes -->
+            <div id="pipeline-nodes" class="flex items-center gap-1 mb-8 flex-wrap"></div>
+
+            <!-- Human Approval Area -->
+            <div id="approval-area" class="hidden mb-6"></div>
+
+            <!-- Forms Area -->
+            <div id="forms-area" class="max-w-lg"></div>
+
+            <!-- Pipeline Log -->
+            <div id="log-area" class="hidden mt-6 bg-gray-900 rounded-xl border border-gray-800 p-4 max-w-lg">
+                <h3 class="text-sm font-semibold text-gray-400 mb-2">Pipeline Log</h3>
+                <div id="log-entries" class="space-y-1 max-h-48 overflow-y-auto"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Agent Detail Panel (hidden by default) -->
+    <div id="detail-panel" class="hidden bg-gray-800 border-l border-gray-700 w-96 overflow-y-auto flex flex-col shrink-0"></div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+var workflow = 'create';
+var projects = [];
+var selectedProject = null;
+var selectedAgent = null;
+var isRunning = false;
+var agentStatuses = {};
+var projectData = {};
+var logs = [];
+
+// ============================================================
+// PIPELINE DEFINITIONS
+// ============================================================
+var CREATION_PIPELINE = [
+    { id: 'scripting', name: 'Scripting', icon: '📝', desc: 'Generates video script with hook, body & CTA' },
+    { id: 'director', name: 'Director', icon: '🎬', desc: 'Creates scene-by-scene storyboard' },
+    { id: 'assets', name: 'Assets', icon: '🖼', desc: 'Sources images, logos & b-roll' },
+    { id: 'video_gen', name: 'Video Gen', icon: '🎥', desc: 'AI video clips (human approved)' },
+    { id: 'voiceover', name: 'Voiceover', icon: '🎤', desc: 'TTS via CosyVoice + SRT captions' },
+    { id: 'sound', name: 'Sound', icon: '🎵', desc: 'BGM & SFX sourcing' },
+    { id: 'motion', name: 'Motion', icon: '✨', desc: 'Remotion + Hyperframes compositions' },
+    { id: 'render', name: 'Render', icon: '💻', desc: 'Dual render engine output' },
+    { id: 'assembly', name: 'Assembly', icon: '🔧', desc: 'FFmpeg final video assembly' },
+    { id: 'qc', name: 'QC', icon: '✅', desc: 'Quality checks on final output' },
+    { id: 'meta', name: 'Metadata', icon: '📋', desc: 'Thumbnails, titles & descriptions' }
+];
+
+var EDITING_PIPELINE = [
+    { id: 'analyze', name: 'Analyze', icon: '🔍', desc: 'Inspects input footage' },
+    { id: 'transcribe', name: 'Transcribe', icon: '📃', desc: 'Speech-to-text via Alibaba ASR' },
+    { id: 'silence', name: 'Silence Cut', icon: '🔇', desc: 'Removes silent segments' },
+    { id: 'color', name: 'Color Grade', icon: '🎨', desc: 'FFmpeg color correction' },
+    { id: 'captions', name: 'Captions', icon: '💬', desc: 'Burns SRT subtitles' },
+    { id: 'broll', name: 'B-Roll', icon: '🎞', desc: 'Inserts stock footage' },
+    { id: 'overlay', name: 'Overlays', icon: '📐', desc: 'Kinetic captions & lower thirds' },
+    { id: 'edit_assembly', name: 'Assembly', icon: '🔧', desc: 'Combines all edits' },
+    { id: 'edit_qc', name: 'QC', icon: '✅', desc: 'Final quality check' }
+];
+
+var STATUS_COLORS = {
+    pending:  { bg: 'bg-gray-700',      border: 'border-gray-600',  text: 'text-gray-400',  dot: 'bg-gray-500',  conn: 'bg-gray-700',  head: '#374151' },
+    running:  { bg: 'bg-blue-900/50',   border: 'border-blue-500',  text: 'text-blue-300',  dot: 'bg-blue-400',  conn: 'bg-blue-500',  head: '#3b82f6' },
+    success:  { bg: 'bg-green-900/30',  border: 'border-green-500', text: 'text-green-300', dot: 'bg-green-400', conn: 'bg-green-500', head: '#22c55e' },
+    failed:   { bg: 'bg-red-900/30',    border: 'border-red-500',   text: 'text-red-300',   dot: 'bg-red-400',   conn: 'bg-red-500',   head: '#ef4444' },
+    waiting:  { bg: 'bg-yellow-900/30', border: 'border-yellow-500',text: 'text-yellow-300',dot: 'bg-yellow-400',conn: 'bg-yellow-500',head: '#eab308' }
+};
+
+function getPipeline() { return workflow === 'create' ? CREATION_PIPELINE : EDITING_PIPELINE; }
+
+// ============================================================
+// RENDER: PIPELINE NODES
+// ============================================================
+function renderPipeline() {
+    var container = document.getElementById('pipeline-nodes');
+    var pipeline = getPipeline();
+    container.innerHTML = '';
+
+    for (var i = 0; i < pipeline.length; i++) {
+        var agent = pipeline[i];
+        var status = agentStatuses[agent.id] || 'pending';
+        var colors = STATUS_COLORS[status];
+        var isSelected = selectedAgent && selectedAgent.id === agent.id;
+        var statusClass = status === 'running' ? 'status-running' : status === 'waiting' ? 'status-waiting' : '';
+
+        var node = document.createElement('div');
+        node.className = 'agent-node ' + colors.bg + ' border ' + colors.border + ' rounded-xl p-3 min-w-[130px] ' + statusClass + (isSelected ? ' selected' : '');
+        node.setAttribute('data-agent-id', agent.id);
+        node.onclick = (function(a) { return function() { selectAgent(a); }; })(agent);
+
+        var pingDot = status === 'running' ? ' animate-ping' : '';
+        node.innerHTML =
+            '<div class="flex items-center gap-2 mb-1">' +
+                '<span class="text-xl">' + agent.icon + '</span>' +
+                '<div class="w-2 h-2 rounded-full ' + colors.dot + pingDot + '"></div>' +
+            '</div>' +
+            '<div class="text-sm font-semibold text-white">' + agent.name + '</div>' +
+            '<div class="text-xs ' + colors.text + ' mt-0.5 capitalize">' + status + '</div>' +
+            '<div class="text-xs text-gray-500 mt-1">Step ' + (i + 1) + '</div>';
+        container.appendChild(node);
+
+        if (i < pipeline.length - 1) {
+            var connStatus = status === 'success' ? 'success' : status === 'running' ? 'running' : 'pending';
+            var cc = STATUS_COLORS[connStatus];
+            var arrow = document.createElement('div');
+            arrow.className = 'connector-arrow';
+            arrow.innerHTML =
+                '<div class="line ' + cc.conn + '"></div>' +
+                '<div class="head" style="border-left-color: ' + cc.head + '"></div>';
+            container.appendChild(arrow);
+        }
+    }
+}
+
+// ============================================================
+// RENDER: FORMS
+// ============================================================
+function renderForms() {
+    var area = document.getElementById('forms-area');
+    if (workflow === 'create') {
+        area.innerHTML =
+            '<div class="bg-gray-800 rounded-xl p-6 border border-gray-700">' +
+                '<h2 class="text-lg font-bold mb-4 flex items-center gap-2">🎬 Create New Video</h2>' +
+                '<div class="space-y-4">' +
+                    '<div>' +
+                        '<label class="block text-sm font-medium text-gray-300 mb-1">Topic / Prompt</label>' +
+                        '<input id="create-topic" type="text" placeholder="e.g., 5 tips for productivity in 30 seconds"' +
+                            ' class="w-full px-4 py-2.5 bg-gray-900 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition" />' +
+                    '</div>' +
+                    '<div class="grid grid-cols-2 gap-4">' +
+                        '<div>' +
+                            '<label class="block text-sm font-medium text-gray-300 mb-1">Duration</label>' +
+                            '<select id="create-duration" class="w-full px-4 py-2.5 bg-gray-900 rounded-lg border border-gray-600">' +
+                                '<option value="15">15 seconds</option>' +
+                                '<option value="30" selected>30 seconds</option>' +
+                                '<option value="60">60 seconds</option>' +
+                                '<option value="90">90 seconds</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-sm font-medium text-gray-300 mb-1">Style</label>' +
+                            '<select id="create-style" class="w-full px-4 py-2.5 bg-gray-900 rounded-lg border border-gray-600">' +
+                                '<option value="marketing">Marketing</option>' +
+                                '<option value="explainer">Explainer</option>' +
+                                '<option value="social">Social Media</option>' +
+                                '<option value="product-launch">Product Launch</option>' +
+                            '</select>' +
+                        '</div>' +
+                    '</div>' +
+                    '<button id="btn-create-video" onclick="handleCreate()"' +
+                        ' class="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-semibold transition">' +
+                        '🚀 Create Video' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+    } else {
+        area.innerHTML =
+            '<div class="bg-gray-800 rounded-xl p-6 border border-gray-700">' +
+                '<h2 class="text-lg font-bold mb-4 flex items-center gap-2">✂️ Edit Existing Footage</h2>' +
+                '<div class="space-y-4">' +
+                    '<div id="drop-zone" class="drop-zone rounded-xl p-8 text-center">' +
+                        '<input type="file" accept="video/*" id="edit-file" class="hidden" />' +
+                        '<label for="edit-file" class="cursor-pointer">' +
+                            '<div class="text-4xl mb-2">📁</div>' +
+                            '<p id="drop-label" class="text-sm text-gray-300">Drop video here or click to upload</p>' +
+                            '<p class="text-xs text-gray-500 mt-1">MP4, MOV, AVI up to 2GB</p>' +
+                        '</label>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-2 gap-3">' +
+                        buildCheckbox('captions', 'Captions', true) +
+                        buildCheckbox('color_grade', 'Color Grade', true) +
+                        buildCheckbox('remove_silences', 'Remove Silences', true) +
+                        buildCheckbox('add_broll', 'Add B-Roll', false) +
+                        buildCheckbox('add_music', 'Add Music', true) +
+                    '</div>' +
+                    '<button id="btn-edit-video" onclick="handleEdit()"' +
+                        ' class="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-semibold transition">' +
+                        '✂️ Edit Video' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+
+        var dz = document.getElementById('drop-zone');
+        dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.classList.add('drag-over'); });
+        dz.addEventListener('dragleave', function() { dz.classList.remove('drag-over'); });
+        dz.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dz.classList.remove('drag-over');
+            var file = e.dataTransfer.files[0];
+            if (file) document.getElementById('drop-label').textContent = file.name;
+        });
+        document.getElementById('edit-file').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (file) document.getElementById('drop-label').textContent = file.name;
+        });
+    }
+}
+
+function buildCheckbox(key, label, checked) {
+    return '<label class="flex items-center gap-2 bg-gray-900 rounded-lg p-3 cursor-pointer hover:bg-gray-800">' +
+        '<input type="checkbox" id="edit-' + key + '" ' + (checked ? 'checked' : '') +
+            ' class="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500" />' +
+        '<span class="text-sm capitalize">' + label + '</span>' +
+    '</label>';
+}
+
+// ============================================================
+// RENDER: DETAIL PANEL
+// ============================================================
+function renderDetailPanel() {
+    var panel = document.getElementById('detail-panel');
+    if (!selectedAgent) { panel.classList.add('hidden'); return; }
+    panel.classList.remove('hidden');
+    panel.classList.add('slide-in');
+
+    var agent = selectedAgent;
+    var status = agentStatuses[agent.id] || 'pending';
+    var colors = STATUS_COLORS[status];
+    var data = projectData[agent.id] || {};
+    var output = data.output || null;
+    var input = data.input || null;
+    var artifact = data.artifact || null;
+
+    var html =
+        '<div class="p-4 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-gray-800 z-10">' +
+            '<div class="flex items-center gap-3">' +
+                '<span class="text-2xl">' + agent.icon + '</span>' +
+                '<div>' +
+                    '<h3 class="font-bold text-lg">' + agent.name + '</h3>' +
+                    '<p class="text-xs text-gray-400">' + agent.desc + '</p>' +
+                '</div>' +
+            '</div>' +
+            '<button onclick="closeDetail()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>' +
+        '</div>' +
+        '<div class="p-4 space-y-4 flex-1">';
+
+    // Status
+    html += '<div class="flex items-center gap-2">' +
+        '<div class="w-3 h-3 rounded-full ' + colors.dot + '"></div>' +
+        '<span class="text-sm font-medium capitalize ' + colors.text + '">' + status + '</span>' +
+    '</div>';
+
+    // Input
+    if (input) {
+        html += '<details class="bg-gray-900 rounded-lg">' +
+            '<summary class="p-3 text-sm font-medium cursor-pointer hover:bg-gray-800">Input Data</summary>' +
+            '<div class="p-3 json-view text-gray-300 max-h-48 overflow-y-auto border-t border-gray-700">' +
+                escapeHtml(JSON.stringify(input, null, 2)) +
+            '</div></details>';
+    }
+
+    // Output
+    html += '<div class="bg-gray-900 rounded-lg">' +
+        '<div class="p-3 border-b border-gray-700"><span class="text-sm font-medium">Output Data</span></div>' +
+        '<div class="p-3 json-view text-gray-300 max-h-64 overflow-y-auto">' +
+            (output ? escapeHtml(JSON.stringify(output, null, 2)) : 'No output yet') +
+        '</div></div>';
+
+    // Artifacts
+    if (artifact) {
+        html += '<div class="bg-gray-900 rounded-lg p-3">' +
+            '<h4 class="text-sm font-medium mb-2">Artifacts</h4>' +
+            '<div class="text-xs text-gray-400 space-y-1">';
+        if (Array.isArray(artifact)) {
+            for (var a = 0; a < artifact.length; a++) {
+                html += '<div>📎 ' + escapeHtml(artifact[a].path || artifact[a]) + '</div>';
+            }
+        } else {
+            html += '<div>📎 ' + escapeHtml(artifact.path || artifact) + '</div>';
+        }
+        html += '</div></div>';
+    }
+
+    // Re-run
+    html += '<button onclick="rerunAgent(\'' + agent.id + '\')"' +
+        ' class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition">' +
+        '🔄 Re-run Agent</button>';
+
+    html += '</div>';
+    panel.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ============================================================
+// RENDER: LOGS
+// ============================================================
+function renderLogs() {
+    var area = document.getElementById('log-area');
+    var entries = document.getElementById('log-entries');
+    if (logs.length === 0) { area.classList.add('hidden'); return; }
+    area.classList.remove('hidden');
+    var html = '';
+    for (var i = 0; i < logs.length; i++) {
+        html += '<div class="text-xs font-mono"><span class="text-gray-600">[' + logs[i].time + ']</span> ' + escapeHtml(logs[i].msg) + '</div>';
+    }
+    entries.innerHTML = html;
+    entries.scrollTop = entries.scrollHeight;
+}
+
+function addLog(msg) {
+    logs.push({ time: new Date().toLocaleTimeString(), msg: msg });
+    renderLogs();
+}
+
+// ============================================================
+// RENDER: PROJECTS
+// ============================================================
+function renderProjects() {
+    var list = document.getElementById('project-list');
+    if (projects.length === 0) {
+        list.innerHTML = '<div class="text-gray-600 text-sm text-center py-8">No projects yet</div>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < projects.length; i++) {
+        var p = projects[i];
+        var isActive = selectedProject && selectedProject.name === p.name;
+        html += '<div onclick="loadProject(' + i + ')" class="p-3 rounded-lg cursor-pointer transition ' +
+            (isActive ? 'bg-blue-600/20 border border-blue-500/50' : 'bg-gray-800 hover:bg-gray-750 border border-transparent') + '">' +
+            '<div class="font-medium text-sm">' + escapeHtml(p.name) + '</div>' +
+            '<div class="text-xs text-gray-500 truncate mt-0.5">' + escapeHtml(p.topic || '') + '</div>' +
+            '<div class="text-xs text-gray-600 mt-1">' + escapeHtml(p.type || p.created_at || '') + '</div>' +
+        '</div>';
+    }
+    list.innerHTML = html;
+}
+
+// ============================================================
+// ACTIONS
+// ============================================================
+function setWorkflow(w) {
+    workflow = w;
+    document.getElementById('btn-create').className = 'px-4 py-1.5 rounded-md text-sm font-medium transition ' +
+        (w === 'create' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white');
+    document.getElementById('btn-edit').className = 'px-4 py-1.5 rounded-md text-sm font-medium transition ' +
+        (w === 'edit' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white');
+    document.getElementById('workflow-title').textContent =
+        w === 'create' ? 'Workflow 1: Creative Production' : 'Workflow 2: Post-Production Editing';
+
+    var pipeline = getPipeline();
+    agentStatuses = {};
+    for (var i = 0; i < pipeline.length; i++) { agentStatuses[pipeline[i].id] = 'pending'; }
+
+    selectedAgent = null;
+    renderAll();
+}
+
+function selectAgent(agent) {
+    if (selectedAgent && selectedAgent.id === agent.id) {
+        selectedAgent = null;
+    } else {
+        selectedAgent = agent;
+    }
+    renderPipeline();
+    renderDetailPanel();
+}
+
+function closeDetail() {
+    selectedAgent = null;
+    renderPipeline();
+    renderDetailPanel();
+}
+
+function rerunAgent(id) { addLog('Re-running ' + id + '...'); }
+
+// ============================================================
+// API CALLS
+// ============================================================
+function fetchProjects() {
+    fetch('/api/projects').then(function(res) { return res.json(); }).then(function(data) {
+        projects = data.projects || [];
+        renderProjects();
+    }).catch(function(err) { console.error('Fetch projects failed:', err); });
+}
+
+function loadProject(idx) {
+    var proj = projects[idx];
+    selectedProject = proj;
+    fetch('/api/projects/' + proj.name).then(function(res) { return res.json(); }).then(function(data) {
+        projectData = data;
+        var pipeline = getPipeline();
+        for (var i = 0; i < pipeline.length; i++) {
+            var a = pipeline[i];
+            agentStatuses[a.id] = (data[a.id] && data[a.id].status) ? data[a.id].status : 'pending';
+        }
+        renderAll();
+    }).catch(function(err) { console.error('Load project failed:', err); });
+}
+
+function handleCreate() {
+    var topicEl = document.getElementById('create-topic');
+    var topic = topicEl.value;
+    if (!topic) return;
+    var duration = parseInt(document.getElementById('create-duration').value);
+    var style = document.getElementById('create-style').value;
+
+    isRunning = true;
+    logs = [];
+    document.getElementById('status-indicator').textContent = '🟡 Pipeline running...';
+    var btn = document.getElementById('btn-create-video');
+    btn.disabled = true;
+    btn.textContent = '⏳ Running Pipeline...';
+
+    var pipeline = getPipeline();
+    agentStatuses = {};
+    for (var i = 0; i < pipeline.length; i++) { agentStatuses[pipeline[i].id] = 'pending'; }
+    renderPipeline();
+
+    var step = 0;
+    function runStep() {
+        if (step >= pipeline.length) {
+            // All steps done, call API
+            fetch('/api/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: topic, duration: duration, style: style })
+            }).then(function(res) { return res.json(); }).then(function(data) {
+                if (data.success) {
+                    addLog('🎉 Pipeline complete! Project: ' + data.project_dir);
+                    fetchProjects();
                 }
-            };
-
-            const handleCreate = async () => {
-                if (!topic) return;
-                setIsCreating(true);
-                try {
-                    const res = await fetch('/api/create', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ topic, duration, style }),
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        fetchProjects();
-                        setTopic('');
-                    }
-                } catch (err) {
-                    console.error('Failed to create video:', err);
-                }
-                setIsCreating(false);
-            };
-
-            return (
-                <div className="min-h-screen">
-                    {/* Header */}
-                    <header className="bg-gray-800 border-b border-gray-700 px-6 py-4">
-                        <div className="flex items-center justify-between">
-                            <h1 className="text-2xl font-bold">🎬 Video Agent Suite</h1>
-                            <div className="text-sm text-gray-400">AI-Powered Video Production</div>
-                        </div>
-                    </header>
-
-                    <div className="flex">
-                        {/* Sidebar - Projects */}
-                        <aside className="w-80 bg-gray-800 border-r border-gray-700 p-4">
-                            <h2 className="text-lg font-semibold mb-4">Projects</h2>
-                            <div className="space-y-2">
-                                {projects.map((proj) => (
-                                    <div
-                                        key={proj.name}
-                                        onClick={() => setSelectedProject(proj)}
-                                        className={`p-3 rounded cursor-pointer transition ${
-                                            selectedProject?.name === proj.name
-                                                ? 'bg-blue-600'
-                                                : 'bg-gray-700 hover:bg-gray-600'
-                                        }`}
-                                    >
-                                        <div className="font-medium">{proj.name}</div>
-                                        <div className="text-sm text-gray-400 truncate">{proj.topic}</div>
-                                    </div>
-                                ))}
-                                {projects.length === 0 && (
-                                    <div className="text-gray-500 text-sm">No projects yet</div>
-                                )}
-                            </div>
-                        </aside>
-
-                        {/* Main Content */}
-                        <main className="flex-1 p-6">
-                            {/* Create Video Form */}
-                            <div className="bg-gray-800 rounded-lg p-6 mb-6">
-                                <h2 className="text-xl font-semibold mb-4">Create New Video</h2>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium mb-2">Topic / Prompt</label>
-                                        <input
-                                            type="text"
-                                            value={topic}
-                                            onChange={(e) => setTopic(e.target.value)}
-                                            placeholder="e.g., 5 tips for productivity"
-                                            className="w-full px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">Duration (seconds)</label>
-                                        <input
-                                            type="number"
-                                            value={duration}
-                                            onChange={(e) => setDuration(parseInt(e.target.value))}
-                                            className="w-full px-4 py-2 bg-gray-700 rounded border border-gray-600"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">Style</label>
-                                        <select
-                                            value={style}
-                                            onChange={(e) => setStyle(e.target.value)}
-                                            className="w-full px-4 py-2 bg-gray-700 rounded border border-gray-600"
-                                        >
-                                            <option value="marketing">Marketing</option>
-                                            <option value="explainer">Explainer</option>
-                                            <option value="social">Social Media</option>
-                                            <option value="product-launch">Product Launch</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={handleCreate}
-                                    disabled={isCreating || !topic}
-                                    className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded font-medium transition"
-                                >
-                                    {isCreating ? 'Creating...' : 'Create Video'}
-                                </button>
-                            </div>
-
-                            {/* Pipeline Visualization */}
-                            {selectedProject && (
-                                <div className="bg-gray-800 rounded-lg p-6">
-                                    <h2 className="text-xl font-semibold mb-4">Pipeline: {selectedProject.name}</h2>
-                                    <div className="grid grid-cols-4 gap-4">
-                                        {PIPELINE_STAGES.map((stage, idx) => (
-                                            <div
-                                                key={stage.id}
-                                                className="pipeline-node bg-gray-700 rounded-lg p-4 text-center"
-                                            >
-                                                <div className="text-3xl mb-2">{stage.icon}</div>
-                                                <div className="text-sm font-medium">{stage.name}</div>
-                                                <div className="text-xs text-gray-400 mt-1">Step {idx + 1}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Empty State */}
-                            {!selectedProject && (
-                                <div className="bg-gray-800 rounded-lg p-12 text-center">
-                                    <div className="text-6xl mb-4">🎬</div>
-                                    <h3 className="text-xl font-semibold mb-2">Select a Project</h3>
-                                    <p className="text-gray-400">Choose a project from the sidebar or create a new one</p>
-                                </div>
-                            )}
-                        </main>
-                    </div>
-                </div>
-            );
+            }).catch(function(err) {
+                addLog('🔴 Error: ' + err.message);
+            }).finally(function() {
+                isRunning = false;
+                document.getElementById('status-indicator').textContent = '🟢 Ready';
+                btn.disabled = false;
+                btn.textContent = '🚀 Create Video';
+            });
+            return;
         }
 
-        ReactDOM.render(<App />, document.getElementById('root'));
-    </script>
+        var agent = pipeline[step];
+        agentStatuses[agent.id] = 'running';
+        renderPipeline();
+        addLog('🔵 Running: ' + agent.name + '...');
+
+        setTimeout(function() {
+            agentStatuses[agent.id] = 'success';
+            renderPipeline();
+            addLog('🟢 Done: ' + agent.name);
+            step++;
+            runStep();
+        }, 2000);
+    }
+    runStep();
+}
+
+function handleEdit() {
+    var fileInput = document.getElementById('edit-file');
+    var file = fileInput.files[0];
+    if (!file) return;
+    addLog('✂️ Edit workflow started with: ' + file.name);
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll() {
+    renderPipeline();
+    renderForms();
+    renderDetailPanel();
+    renderLogs();
+    renderProjects();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+(function init() {
+    var pipeline = getPipeline();
+    for (var i = 0; i < pipeline.length; i++) { agentStatuses[pipeline[i].id] = 'pending'; }
+    renderAll();
+    fetchProjects();
+    setInterval(fetchProjects, 5000);
+})();
+</script>
 </body>
 </html>
