@@ -2,6 +2,10 @@ from agents.base import BaseAgent, AgentInput, AgentOutput
 from agents.scripting import ScriptingAgent
 from agents.director import DirectorAgent
 from agents.asset_sourcing import AssetSourcingAgent
+from agents.image_gen import ImageGenAgent
+from agents.stock_media import StockMediaAgent
+from agents.logo_lookup import LogoLookupAgent
+from agents.asset_orchestrator import AssetOrchestrator
 from agents.voiceover import VoiceoverAgent
 from agents.motion_graphics import MotionGraphicsAgent
 from agents.transcription import TranscriptionAgent
@@ -21,6 +25,10 @@ __all__ = [
     "ScriptingAgent",
     "DirectorAgent",
     "AssetSourcingAgent",
+    "ImageGenAgent",
+    "StockMediaAgent",
+    "LogoLookupAgent",
+    "AssetOrchestrator",
     "VoiceoverAgent",
     "MotionGraphicsAgent",
     "TranscriptionAgent",
