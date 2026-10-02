@@ -1,3 +1,10 @@
+# ============================================================
+# REPOGUARD — MANUAL REVIEW REQUIRED: Dockerfile
+# Scanned: 2026-10-02T12:53:04.349Z
+# The following findings could NOT be automatically patched:
+#   [HIGH] docker-no-user-directive: Dockerfile has no USER directive — container will run as root by default
+# ============================================================
+
 FROM python:3.14-slim
 
 WORKDIR /app
@@ -10,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Remotion + Hyperframes)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+RUN # REMOVED BY REPOGUARD: curl|bash remote execution - \
     && apt-get install -y nodejs
 
 # Copy requirements first (for Docker layer caching)
